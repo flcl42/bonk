@@ -13,7 +13,7 @@
     <DebugType>none</DebugType>
     <DebugSymbols>false</DebugSymbols>
     <Version>1.1.0</Version>
-    <PublishDir Condition="'$(PublishDir)' == ''">C:\Programs\</PublishDir>
+    <PublishDir Condition="'$(PublishDir)' == ''">.\</PublishDir>
   </PropertyGroup>
 
   <ItemGroup>

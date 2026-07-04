@@ -9,7 +9,7 @@ Release assets are unpacked, self-contained Windows executables.
 Windows, PowerShell:
 
 ```powershell
-$repo='flcl42/bonk'; $dir='C:\Programs'; New-Item -ItemType Directory -Force $dir | Out-Null; Invoke-WebRequest "https://github.com/$repo/releases/latest/download/bonk-windows-x64.exe" -OutFile "$dir\bonk.exe"; $p=[Environment]::GetEnvironmentVariable('Path','User'); if (($p -split ';') -notcontains $dir) { [Environment]::SetEnvironmentVariable('Path', ((@($p -split ';') + $dir | Where-Object { $_ }) -join ';'), 'User'); $env:Path += ";$dir" }
+$repo='flcl42/bonk'; Invoke-WebRequest "https://github.com/$repo/releases/latest/download/bonk-windows-x64.exe" -OutFile ".\bonk.exe"
 ```
 
 ## Usage
@@ -28,10 +28,10 @@ If an invalid index is passed, details are written to `%TEMP%\bonk-error.txt`.
 ## Build
 
 ```powershell
-dotnet publish -c Release
+dotnet publish -c Release -o .
 ```
 
-The project defaults `PublishDir` to `C:\Programs\`, so local publish output is `C:\Programs\bonk.exe`.
+Local publish output is `.\bonk.exe`.
 
 ## Release
 
