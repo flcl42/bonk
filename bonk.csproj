@@ -12,7 +12,8 @@
     <PublishTrimmed>true</PublishTrimmed>
     <DebugType>none</DebugType>
     <DebugSymbols>false</DebugSymbols>
-    <PublishDir>C:\Programs\</PublishDir>
+    <Version>1.1.0</Version>
+    <PublishDir Condition="'$(PublishDir)' == ''">C:\Programs\</PublishDir>
   </PropertyGroup>
 
   <ItemGroup>
