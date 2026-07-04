@@ -1,4 +1,6 @@
 using System.Globalization;
+using System.Diagnostics;
+using System.ComponentModel;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -109,6 +111,121 @@ internal static class Program
     }
 
     private static void PlayMp3(string path)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            PlayMp3WithMci(path);
+            return;
+        }
+
+        if (OperatingSystem.IsMacOS())
+        {
+            RunPlayer("afplay", [path]);
+            return;
+        }
+
+        if (OperatingSystem.IsLinux())
+        {
+            PlayMp3OnLinux(path);
+            return;
+        }
+
+        throw new PlatformNotSupportedException($"Unsupported OS: {RuntimeInformation.OSDescription}");
+    }
+
+    private static void PlayMp3OnLinux(string path)
+    {
+        (string FileName, string[] Arguments)[] players =
+        [
+            ("ffplay", ["-nodisp", "-autoexit", "-loglevel", "error", path]),
+            ("mpg123", ["-q", path]),
+            ("mpv", ["--no-video", "--really-quiet", path]),
+            ("cvlc", ["--play-and-exit", "--intf", "dummy", path]),
+        ];
+
+        StringBuilder errors = new();
+
+        foreach ((string fileName, string[] arguments) in players)
+        {
+            if (TryRunPlayer(fileName, arguments, errors))
+            {
+                return;
+            }
+        }
+
+        throw new InvalidOperationException(
+            "No supported Linux MP3 player was found. Install ffplay, mpg123, mpv, or VLC." +
+            Environment.NewLine +
+            errors);
+    }
+
+    private static void RunPlayer(string fileName, string[] arguments)
+    {
+        StringBuilder errors = new();
+
+        if (!TryRunPlayer(fileName, arguments, errors))
+        {
+            throw new InvalidOperationException(errors.ToString());
+        }
+    }
+
+    private static bool TryRunPlayer(string fileName, string[] arguments, StringBuilder errors)
+    {
+        try
+        {
+            using Process process = new();
+            process.StartInfo.FileName = fileName;
+            process.StartInfo.UseShellExecute = false;
+            process.StartInfo.RedirectStandardError = true;
+            process.StartInfo.RedirectStandardOutput = true;
+            process.StartInfo.CreateNoWindow = true;
+
+            foreach (string argument in arguments)
+            {
+                process.StartInfo.ArgumentList.Add(argument);
+            }
+
+            process.Start();
+            string standardOutput = process.StandardOutput.ReadToEnd();
+            string standardError = process.StandardError.ReadToEnd();
+            process.WaitForExit();
+
+            if (process.ExitCode == 0)
+            {
+                return true;
+            }
+
+            errors.Append(CultureInfo.InvariantCulture, $"{fileName} exited with code {process.ExitCode}.");
+
+            if (!string.IsNullOrWhiteSpace(standardError))
+            {
+                errors.Append(' ');
+                errors.Append(standardError.Trim());
+            }
+            else if (!string.IsNullOrWhiteSpace(standardOutput))
+            {
+                errors.Append(' ');
+                errors.Append(standardOutput.Trim());
+            }
+
+            errors.AppendLine();
+            return false;
+        }
+        catch (Win32Exception ex) when (ex.NativeErrorCode == 2)
+        {
+            errors.Append(CultureInfo.InvariantCulture, $"{fileName} was not found on PATH.");
+            errors.AppendLine();
+            return false;
+        }
+        catch (Exception ex)
+        {
+            errors.Append(CultureInfo.InvariantCulture, $"{fileName} failed: {ex.Message}");
+            errors.AppendLine();
+            return false;
+        }
+    }
+
+    private static void PlayMp3WithMci(string path)
     {
         string alias = $"bonk{Environment.ProcessId}{Guid.NewGuid():N}";
 

@@ -15,46 +15,66 @@ permissions:
   contents: read
 
 jobs:
-  check:
-    name: check
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 10.0.x
-      - run: dotnet restore ./bonk.csproj
-      - run: dotnet build ./bonk.csproj -c Release --no-restore
-
   build:
-    name: build bonk-windows-x64.exe
-    needs: check
-    runs-on: windows-latest
+    name: build ${{ matrix.asset }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rid: linux-x64
+            runner: ubuntu-latest
+            asset: bonk-linux-x64
+          - rid: linux-arm64
+            runner: ubuntu-24.04-arm
+            asset: bonk-linux-arm64
+          - rid: osx-x64
+            runner: macos-15-intel
+            asset: bonk-macos-x64
+          - rid: osx-arm64
+            runner: macos-latest
+            asset: bonk-macos-arm64
+          - rid: win-x64
+            runner: windows-latest
+            asset: bonk-windows-x64.exe
+          - rid: win-arm64
+            runner: windows-11-arm
+            asset: bonk-windows-arm64.exe
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
+      - name: Install Native AOT prerequisites
+        if: startsWith(matrix.rid, 'linux')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang zlib1g-dev
       - name: Publish Native AOT executable
         shell: pwsh
         run: >
           dotnet publish ./bonk.csproj
           -c Release
-          -r win-x64
+          -r ${{ matrix.rid }}
           --self-contained true
           -p:PublishAot=true
           -p:DebugType=none
           -p:DebugSymbols=false
-          -p:PublishDir=publish/win-x64/
+          -p:PublishDir=publish/${{ matrix.rid }}/
       - name: Stage release asset
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force dist | Out-Null
-          Copy-Item "publish/win-x64/bonk.exe" "dist/bonk-windows-x64.exe"
+          $source = if ("${{ matrix.asset }}".EndsWith(".exe")) {
+            "publish/${{ matrix.rid }}/bonk.exe"
+          } else {
+            "publish/${{ matrix.rid }}/bonk"
+          }
+          Copy-Item $source "dist/${{ matrix.asset }}"
       - uses: actions/upload-artifact@v4
         with:
-          name: bonk-windows-x64.exe
-          path: dist/bonk-windows-x64.exe
+          name: ${{ matrix.asset }}
+          path: dist/${{ matrix.asset }}
           if-no-files-found: error
           compression-level: 0
 
