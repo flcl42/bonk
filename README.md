@@ -31,9 +31,12 @@ bonk
 bonk 0
 bonk 1
 bonk 30
+bonk 5 --wait
 ```
 
 `bonk` with no arguments plays melody `0`, the original current sound. Pass a number from `0` through `30` to choose a different embedded melody.
+
+By default `bonk` returns immediately (~0.1 s) and the sound keeps playing to the end in a detached background process, so tool calls and shells never block. Pass `--wait` (or `-w`) to block until the sound finishes, e.g. for scripts that sequence sounds.
 
 If an invalid index is passed, details are written to `bonk-error.txt` in the
 system temp directory.

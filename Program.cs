@@ -45,16 +45,60 @@ internal static class Program
     [STAThread]
     private static int Main(string[] args)
     {
+        bool wait = false;
+        bool isChild = false;
+        string? indexArg = null;
+
+        foreach (string arg in args)
+        {
+            if (arg == "--wait" || arg == "-w")
+            {
+                wait = true;
+            }
+            else if (arg == "--child")
+            {
+                isChild = true;
+            }
+            else if (indexArg is null && !arg.StartsWith('-'))
+            {
+                indexArg = arg;
+            }
+            else
+            {
+                WriteError(new ArgumentException($"Usage: bonk [0-{Melodies.Length - 1}] [--wait]"));
+                return 1;
+            }
+        }
+
         Melody melody;
 
         try
         {
-            melody = SelectMelody(args);
+            melody = SelectMelody(indexArg);
         }
         catch (Exception ex)
         {
             WriteError(ex);
             return 1;
+        }
+
+        // Default mode: spawn a detached child that plays to the end,
+        // return immediately so tool calls / shells don't block ~2-3s.
+        // Playback is tied to the playing process (MCI handle on Windows,
+        // blocking player wait on macOS/Linux), so just returning early
+        // without a child would cut the sound off.
+        if (!isChild && !wait)
+        {
+            try
+            {
+                SpawnDetachedPlayer(melody.Index);
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                WriteError(ex);
+                return 1;
+            }
         }
 
         string tempPath = Path.Combine(Path.GetTempPath(), $"bonk-{melody.Index}-{Environment.ProcessId}-{Guid.NewGuid():N}.mp3");
@@ -76,22 +120,45 @@ internal static class Program
         }
     }
 
-    private static Melody SelectMelody(string[] args)
+    private static void SpawnDetachedPlayer(int index)
     {
-        if (args.Length == 0)
+        string? exe = Environment.ProcessPath;
+        if (string.IsNullOrEmpty(exe))
+        {
+            string baseName = Path.Combine(AppContext.BaseDirectory, "bonk");
+            exe = OperatingSystem.IsWindows() ? baseName + ".exe" : baseName;
+        }
+
+        if (string.IsNullOrEmpty(exe))
+        {
+            throw new InvalidOperationException("Cannot determine executable path for detached playback.");
+        }
+
+        ProcessStartInfo startInfo = new()
+        {
+            FileName = exe,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        };
+        startInfo.ArgumentList.Add(index.ToString(CultureInfo.InvariantCulture));
+        startInfo.ArgumentList.Add("--child");
+
+        using Process? child = Process.Start(startInfo);
+        // No WaitForExit: parent returns immediately, child plays to the end.
+        // Disposing the Process handle here does not stop the child.
+    }
+
+    private static Melody SelectMelody(string? indexArg)
+    {
+        if (indexArg is null)
         {
             return Melodies[0];
         }
 
-        if (args.Length != 1)
-        {
-            throw new ArgumentException($"Usage: bonk [0-{Melodies.Length - 1}]");
-        }
-
-        if (!int.TryParse(args[0], NumberStyles.None, CultureInfo.InvariantCulture, out int index) ||
+        if (!int.TryParse(indexArg, NumberStyles.None, CultureInfo.InvariantCulture, out int index) ||
             (uint)index >= (uint)Melodies.Length)
         {
-            throw new ArgumentOutOfRangeException(nameof(args), args[0], $"Melody must be a number from 0 to {Melodies.Length - 1}.");
+            throw new ArgumentOutOfRangeException(nameof(indexArg), indexArg, $"Melody must be a number from 0 to {Melodies.Length - 1}.");
         }
 
         return Melodies[index];
@@ -260,7 +327,7 @@ internal static class Program
         StringBuilder message = new();
         message.AppendLine(ex.ToString());
         message.AppendLine();
-        message.AppendLine($"Usage: bonk [0-{Melodies.Length - 1}]");
+        message.AppendLine($"Usage: bonk [0-{Melodies.Length - 1}] [--wait]");
         message.AppendLine();
         message.AppendLine("Available melodies:");
 
